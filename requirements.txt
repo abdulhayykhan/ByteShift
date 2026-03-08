@@ -5,7 +5,6 @@ certifi==2026.2.25
 charset-normalizer==3.4.5
 click==8.3.1
 colorama==0.4.6
-docx2pdf==0.1.8
 fastapi==0.135.1
 ffmpeg-python==0.2.0
 fire==0.7.1

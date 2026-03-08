@@ -7,7 +7,7 @@ It supports image, document, audio, and video conversion routes and streams conv
 
 - Backend: FastAPI, Starlette, Uvicorn
 - Frontend: HTML, CSS, vanilla JavaScript
-- Conversion libraries: Pillow, pdf2docx, docx2pdf, python-docx, pydub, ffmpeg-python, pdf2image, pypdfium2
+- Conversion libraries: Pillow, pdf2docx, python-docx, pydub, ffmpeg-python, pdf2image, pypdfium2
 - Runtime system dependencies: `ffmpeg`, `poppler-utils`
 
 ## Supported Conversions
@@ -19,8 +19,8 @@ It supports image, document, audio, and video conversion routes and streams conv
 - Document routes:
   - PDF -> DOCX
   - PDF -> PNG/JPG (first page)
-  - DOCX -> PDF (Windows hosts with Microsoft Word)
-  - DOCX -> PNG/JPG (depends on DOCX -> PDF capability)
+  - DOCX -> PDF (via LibreOffice headless)
+  - DOCX -> PNG/JPG (via DOCX -> PDF intermediate)
 - Audio routes:
   - MP3 <-> WAV
   - Audio (MP3/WAV) -> MP4
@@ -47,7 +47,7 @@ ByteShift is configured to use environment-safe paths and writable temp storage.
 3. Railway will detect Nixpacks and install Python dependencies.
 4. Railway will install system packages declared in `nixpacks.toml`.
 5. App starts with:
-   - `uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}`
+  - `gunicorn -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:${PORT:-8000} main:app`
 
 ## Local Run
 
@@ -66,5 +66,5 @@ Open `http://127.0.0.1:8000`.
 
 ## Notes
 
-- On Linux environments (including Railway), DOCX -> PDF and DOCX -> image routes are unavailable because `docx2pdf` requires Microsoft Word.
+- DOCX -> PDF conversion uses LibreOffice in headless mode and requires `libreoffice` to be installed on the server.
 - All conversion temp files are created in a writable temp directory and cleaned up after response.

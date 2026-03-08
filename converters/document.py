@@ -1,8 +1,9 @@
 import os
+import shutil
+import subprocess
 import tempfile
 import zipfile
 
-from docx2pdf import convert as docx_to_pdf_convert
 from fastapi import BackgroundTasks, UploadFile
 from fastapi.responses import FileResponse
 from pdf2docx import Converter
@@ -52,87 +53,45 @@ def validate_docx_bytes(contents: bytes) -> None:
         )
 
 
-def convert_docx_to_pdf_with_retry(input_path: str, output_path: str) -> None:
-    """Convert DOCX to PDF with one normalization retry for compatibility issues."""
-    if os.name != "nt":
-        raise ValueError(
-            "DOCX to PDF conversion requires Microsoft Word and is only supported on Windows hosts. "
-            "This conversion route is unavailable in this deployment environment."
+def convert_docx_to_pdf_libreoffice(input_path: str, output_dir: str) -> str:
+    """
+    Uses LibreOffice in headless mode to convert DOCX to PDF.
+    Returns the path to the generated PDF file.
+    """
+    libreoffice_cmd = shutil.which("libreoffice") or shutil.which("soffice")
+    if libreoffice_cmd is None:
+        raise RuntimeError(
+            "LibreOffice executable not found on PATH. Install LibreOffice (or ensure soffice is available)."
         )
 
-    original_error = None
-    try:
-        docx_to_pdf_convert(input_path, output_path)
-        return
-    except Exception as first_error:
-        original_error = first_error
+    result = subprocess.run(
+        [
+            libreoffice_cmd,
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            output_dir,
+            input_path,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "unknown LibreOffice error").strip()
+        raise RuntimeError(f"LibreOffice conversion failed: {details}")
 
-    # Some generated DOCX files fail in docx2pdf. Re-save once via python-docx.
-    normalized_fd, normalized_path = tempfile.mkstemp(suffix=".docx")
-    os.close(normalized_fd)
-    try:
-        from docx import Document
-
-        doc = Document(input_path)
-        doc.save(normalized_path)
-        try:
-            docx_to_pdf_convert(normalized_path, output_path)
-            return
-        except Exception as normalized_error:
-            # Final fallback: drive Word directly with OpenAndRepair to auto-recover files.
-            try:
-                from win32com.client import DispatchEx
-
-                wd_format_pdf = 17
-                word = DispatchEx("Word.Application")
-                word.Visible = False
-                doc = None
-                try:
-                    doc = word.Documents.Open(
-                        normalized_path,
-                        ConfirmConversions=False,
-                        ReadOnly=True,
-                        AddToRecentFiles=False,
-                        OpenAndRepair=True,
-                    )
-                    doc.SaveAs(output_path, FileFormat=wd_format_pdf)
-                    return
-                finally:
-                    if doc is not None:
-                        doc.Close(False)
-                    word.Quit()
-            except Exception:
-                message = str(normalized_error).lower()
-                if "corrupted" in message or "microsoft word" in message or "-214" in message:
-                    raise ValueError(
-                        "DOCX to PDF conversion failed after automatic repair attempts. "
-                        "Please open the file in Microsoft Word, save it as a new .docx, then try again."
-                    ) from normalized_error
-                if original_error is not None:
-                    raise ValueError(f"Failed to convert DOCX to PDF: {str(original_error)}") from original_error
-                raise ValueError(f"Failed to convert DOCX to PDF: {str(normalized_error)}") from normalized_error
-    except Exception as normalize_error:
-        message = str(normalize_error).lower()
-        if "corrupted" in message or "microsoft word" in message or "-214" in message:
-            raise ValueError(
-                "Microsoft Word could not open this DOCX for PDF conversion. "
-                "The file may be corrupted or incompatible. Open it in Word and save it as a new .docx, then try again."
-            ) from normalize_error
-        if original_error is not None:
-            raise ValueError(f"Failed to convert DOCX to PDF: {str(original_error)}") from original_error
-        raise ValueError(f"Failed to convert DOCX to PDF: {str(normalize_error)}") from normalize_error
-    finally:
-        cleanup_file(normalized_path)
+    # LibreOffice outputs filename.pdf in output_dir
+    base_name = os.path.splitext(os.path.basename(input_path))[0]
+    pdf_path = os.path.join(output_dir, base_name + ".pdf")
+    if not os.path.exists(pdf_path):
+        raise RuntimeError("LibreOffice did not produce output file.")
+    return pdf_path
 
 
-def raise_docx_com_error_as_value_error(error: Exception, context: str) -> None:
-    """Convert raw Word COM errors to user-facing messages."""
-    message = str(error).lower()
-    if "microsoft word" in message or "-214" in message or "corrupted" in message:
-        raise ValueError(
-            "Microsoft Word could not convert this DOCX even after automatic repair attempts. "
-            "The file may be corrupted or incompatible. Open it in Word and save it as a new .docx file, then try again."
-        ) from error
+def raise_docx_conversion_error(error: Exception, context: str) -> None:
+    """Convert DOCX conversion errors into user-facing messages."""
     raise ValueError(f"{context}: {str(error)}") from error
 
 
@@ -212,7 +171,11 @@ async def convert_document(
             cv.convert(output_path)
             cv.close()
         elif conversion_key == "docx->pdf":
-            convert_docx_to_pdf_with_retry(input_path, output_path)
+            generated_pdf = convert_docx_to_pdf_libreoffice(input_path, os.path.dirname(output_path))
+            if generated_pdf != output_path:
+                if os.path.exists(output_path):
+                    cleanup_file(output_path)
+                os.replace(generated_pdf, output_path)
 
         original_name = os.path.splitext(file.filename)[0] if file.filename else "document"
         output_filename = f"{original_name}.{output_format}"
@@ -290,7 +253,11 @@ async def docx_to_image(
     temp_pdf.close()
 
     try:
-        convert_docx_to_pdf_with_retry(docx_path, pdf_path)
+        generated_pdf = convert_docx_to_pdf_libreoffice(docx_path, os.path.dirname(pdf_path))
+        if generated_pdf != pdf_path:
+            if os.path.exists(pdf_path):
+                cleanup_file(pdf_path)
+            pdf_path = generated_pdf
 
         with open(pdf_path, "rb") as pdf_file:
             pdf_contents = pdf_file.read()
@@ -298,9 +265,9 @@ async def docx_to_image(
         image = render_first_pdf_page(pdf_contents)
     except ValueError as e:
         # Preserve domain-specific, user-friendly validation errors.
-        raise_docx_com_error_as_value_error(e, "Failed to convert DOCX to image")
+        raise_docx_conversion_error(e, "Failed to convert DOCX to image")
     except Exception as e:
-        raise_docx_com_error_as_value_error(e, "Failed to convert DOCX to image")
+        raise_docx_conversion_error(e, "Failed to convert DOCX to image")
     finally:
         cleanup_file(docx_path)
         cleanup_file(pdf_path)
