@@ -88,6 +88,8 @@
         </div>
     </div>
 
+        <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
     <script>
       // Format map: input extension -> available output formats with per-format routes
       const formatMap = {
@@ -156,6 +158,22 @@
       const loadingBar = document.getElementById('loadingBar');
       const loadingPercent = document.getElementById('loadingPercent');
       const loadingStage = document.getElementById('loadingStage');
+      const toastContainer = document.getElementById('toastContainer');
+
+      function showToast(message, type) {
+        if (!toastContainer) return;
+        const toast = document.createElement('div');
+        toast.className = 'alert ' + (type === 'success' ? 'alert-success' : type === 'warning' ? 'alert-warning' : 'alert-error');
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
+
+        setTimeout(function() {
+          toast.style.opacity = '0';
+          setTimeout(function() {
+            toast.remove();
+          }, 250);
+        }, 4000);
+      }
 
       // Click upload area to trigger file input
       const changeFileBtn = document.getElementById('changeFileBtn');
@@ -353,12 +371,29 @@
         if (loadingStage) loadingStage.textContent = 'Preparing conversion';
 
         let stopPolling = false;
+        let currentProgress = 0;
+        let lastBackendUpdateAt = Date.now();
+
+        const progressFallbackTimer = setInterval(function() {
+          if (stopPolling) return;
+          const elapsedSinceBackendMs = Date.now() - lastBackendUpdateAt;
+          if (elapsedSinceBackendMs < 800) return;
+
+          if (currentProgress < 90) {
+            currentProgress += currentProgress < 40 ? 2 : 1;
+            const clamped = Math.min(currentProgress, 90);
+            loadingBar.style.width = clamped + '%';
+            loadingPercent.textContent = Math.floor(clamped) + '%';
+          }
+        }, 250);
 
         const pollPromise = pollProgress(jobId, function(data) {
           const progressValue = Math.max(0, Math.min(100, Number(data.progress) || 0));
+          lastBackendUpdateAt = Date.now();
+          currentProgress = Math.max(currentProgress, progressValue);
           loadingBar.style.transition = 'width 0.2s ease';
-          loadingBar.style.width = progressValue + '%';
-          loadingPercent.textContent = Math.floor(progressValue) + '%';
+          loadingBar.style.width = currentProgress + '%';
+          loadingPercent.textContent = Math.floor(currentProgress) + '%';
           if (loadingStage && data.stage) loadingStage.textContent = data.stage;
         }, function() {
           return stopPolling;
@@ -396,16 +431,22 @@
         }
 
         const finalProgress = await pollPromise;
+        stopPolling = true;
+        clearInterval(progressFallbackTimer);
 
         if (conversionError || finalProgress.status === 'failed') {
           loadingBar.style.width = '100%';
           loadingPercent.textContent = '100%';
           if (loadingStage) loadingStage.textContent = 'Conversion failed';
-          alert((conversionError && conversionError.message) || finalProgress.error || 'Conversion failed');
+          showToast((conversionError && conversionError.message) || finalProgress.error || 'Conversion failed', 'error');
+        } else if (finalProgress.status === 'timeout') {
+          if (loadingStage) loadingStage.textContent = 'Still processing...';
+          showToast('Conversion is taking longer than expected. Please try again shortly.', 'warning');
         } else {
           loadingBar.style.width = '100%';
           loadingPercent.textContent = '100%';
           if (loadingStage) loadingStage.textContent = 'Conversion complete';
+          showToast('Conversion complete. Download started.', 'success');
         }
 
         setTimeout(function() {

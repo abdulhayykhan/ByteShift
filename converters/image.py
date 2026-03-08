@@ -4,6 +4,7 @@ from fastapi import UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse
 from PIL import Image
 from PIL import features
+from PIL import UnidentifiedImageError
 from io import BytesIO
 
 SUPPORTED_FORMATS = {"PNG", "JPG", "JPEG", "WEBP"}
@@ -44,7 +45,10 @@ async def convert_image(file: UploadFile, output_format: str, background_tasks: 
     contents = await file.read()
     
     # Open image with Pillow
-    image = Image.open(BytesIO(contents))
+    try:
+        image = Image.open(BytesIO(contents))
+    except UnidentifiedImageError as e:
+        raise ValueError("Input file is not a valid image.") from e
 
     # Some Pillow builds are compiled without WEBP support.
     if output_format == "WEBP" and not features.check("webp"):
@@ -107,7 +111,10 @@ async def image_to_pdf(file: UploadFile, background_tasks: BackgroundTasks) -> F
     contents = await file.read()
 
     # Open image with Pillow
-    image = Image.open(BytesIO(contents))
+    try:
+        image = Image.open(BytesIO(contents))
+    except UnidentifiedImageError as e:
+        raise ValueError("Input file is not a valid image.") from e
 
     # Convert to RGB (required for PDF)
     if image.mode in ("RGBA", "LA", "P"):

@@ -1,5 +1,4 @@
 [phases.setup]
-nixPkgs = ["ffmpeg", "poppler_utils", "libreoffice"]
 aptPkgs = ["ffmpeg", "poppler-utils", "libreoffice"]
 
 [start]

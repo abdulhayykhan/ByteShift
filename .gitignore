@@ -20,6 +20,7 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+route_audit.py
 
 # IDE/editor files
 .vscode/

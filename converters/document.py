@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from pathlib import Path
 
 from fastapi import BackgroundTasks, UploadFile
 from fastapi.responses import FileResponse
@@ -60,27 +61,46 @@ def convert_docx_to_pdf_libreoffice(input_path: str, output_dir: str) -> str:
     """
     libreoffice_cmd = shutil.which("libreoffice") or shutil.which("soffice")
     if libreoffice_cmd is None:
+        for candidate in ("/usr/bin/libreoffice", "/usr/bin/soffice", "/bin/libreoffice", "/bin/soffice"):
+            if os.path.exists(candidate):
+                libreoffice_cmd = candidate
+                break
+    if libreoffice_cmd is None:
         raise RuntimeError(
             "LibreOffice executable not found on PATH. Install LibreOffice (or ensure soffice is available)."
         )
 
-    result = subprocess.run(
-        [
-            libreoffice_cmd,
-            "--headless",
-            "--convert-to",
-            "pdf",
-            "--outdir",
-            output_dir,
-            input_path,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    if result.returncode != 0:
-        details = (result.stderr or result.stdout or "unknown LibreOffice error").strip()
-        raise RuntimeError(f"LibreOffice conversion failed: {details}")
+    profile_dir = tempfile.mkdtemp(prefix="libreoffice-profile-")
+    try:
+        profile_uri = Path(profile_dir).resolve().as_uri()
+        env = dict(os.environ)
+        env.setdefault("HOME", tempfile.gettempdir())
+        env.setdefault("TMPDIR", tempfile.gettempdir())
+
+        result = subprocess.run(
+            [
+                libreoffice_cmd,
+                "--headless",
+                "--nologo",
+                "--nodefault",
+                "--nofirststartwizard",
+                f"-env:UserInstallation={profile_uri}",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                output_dir,
+                input_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=env,
+        )
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout or "unknown LibreOffice error").strip()
+            raise RuntimeError(f"LibreOffice conversion failed: {details}")
+    finally:
+        shutil.rmtree(profile_dir, ignore_errors=True)
 
     # LibreOffice outputs filename.pdf in output_dir
     base_name = os.path.splitext(os.path.basename(input_path))[0]
@@ -190,6 +210,9 @@ async def convert_document(
             filename=output_filename,
             headers={"Content-Disposition": f"attachment; filename={output_filename}"},
         )
+    except Exception as e:
+        cleanup_file(output_path)
+        raise ValueError(f"Failed to convert document: {str(e)}") from e
     finally:
         cleanup_file(input_path)
 

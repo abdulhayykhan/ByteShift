@@ -5,10 +5,10 @@ It supports image, document, audio, and video conversion routes and streams conv
 
 ## Stack
 
-- Backend: FastAPI, Starlette, Uvicorn
+- Backend: FastAPI, Starlette, Uvicorn, Gunicorn (production)
 - Frontend: HTML, CSS, vanilla JavaScript
 - Conversion libraries: Pillow, pdf2docx, pydub, ffmpeg-python, pdf2image, pypdfium2
-- Runtime system dependencies: `ffmpeg`, `poppler-utils`
+- Runtime system dependencies: `ffmpeg`, `poppler-utils`, `libreoffice`
 
 ## Supported Conversions
 
@@ -48,6 +48,10 @@ ByteShift is configured to use environment-safe paths and writable temp storage.
 5. App starts with:
   - `gunicorn -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:${PORT:-8000} main:app`
 
+### Health Check
+
+- Railway health endpoint: `/healthz`
+
 ## Local Run
 
 ```bash
@@ -66,4 +70,5 @@ Open `http://127.0.0.1:8000`.
 ## Notes
 
 - DOCX -> PDF conversion uses LibreOffice in headless mode and requires `libreoffice` to be installed on the server.
+- LibreOffice runs with a temporary user profile under `/tmp` to support read-only deployment filesystems.
 - All conversion temp files are created in a writable temp directory and cleaned up after response.
