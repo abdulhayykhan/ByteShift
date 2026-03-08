@@ -156,4 +156,4 @@ This project is open-source and available for educational and commercial use und
 
 ---
 
-**Built with ❤️ by [Abdul Hayy Khan](https://www.linkedin.com/in/abdulhayykhan/)**
+**Made with ❤️ by [Abdul Hayy Khan](https://www.linkedin.com/in/abdulhayykhan/)**
