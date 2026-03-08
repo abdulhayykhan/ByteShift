@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByteShift - Convert Anything, Instantly</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <input type="checkbox" id="theme-toggle" class="theme-toggle-checkbox">
+
+    <div class="page-wrapper">
+        <header>
+            <label for="theme-toggle" class="theme-toggle-label"></label>
+            <h1>ByteShift</h1>
+            <p class="tagline">Convert anything, instantly</p>
+        </header>
+
+        <main>
+            <section class="converter-section">
+                <div class="converter-panel">
+
+                    <div class="panel panel-left">
+                        <div class="panel-header">
+                            <span class="panel-icon">📂</span>
+                            <h2 class="panel-title">Upload File</h2>
+                        </div>
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-placeholder" id="uploadPlaceholder">
+                                <span class="upload-icon">⬆️</span>
+                                <p class="upload-text">Click to select a file</p>
+                                <p class="upload-subtext">Images, Documents, Audio, Video</p>
+                            </div>
+                            <div class="upload-info hidden" id="uploadInfo" onclick="event.stopPropagation()">
+                                <span class="file-icon" id="fileIcon">📄</span>
+                                <p class="file-name" id="fileName">filename.ext</p>
+                                <div class="file-meta-section">
+                                    <p class="file-meta" id="fileMeta">Detected: -</p>
+                                    <p class="file-size" id="fileSize"></p>
+                                </div>
+                                <button type="button" class="change-file-btn" id="changeFileBtn">✏️ Change File</button>
+                            </div>
+                            <input type="file" id="fileInput" class="file-input-hidden" accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.mp3,.wav,.mp4,.avi">
+                        </div>
+                    </div>
+
+                    <div class="panel-divider">
+                        <div class="divider-arrow">⇒</div>
+                    </div>
+
+                    <div class="panel panel-right">
+                        <div class="panel-header">
+                            <span class="panel-icon">🎯</span>
+                            <h2 class="panel-title">Convert To</h2>
+                        </div>
+                        <div class="format-grid" id="formatGrid">
+                            <p class="format-placeholder">Upload a file to see available formats</p>
+                        </div>
+                        <form method="POST" id="converterForm" enctype="multipart/form-data">
+                            <input type="hidden" name="output_format" id="outputFormatInput">
+                            <input type="file" name="file" id="hiddenFileInput" style="display:none">
+                            <button type="submit" class="convert-btn" id="convertBtn" disabled>
+                                CONVERT &amp; DOWNLOAD
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+
+        <footer>
+          <p>Made with ❤️ by <a class="footer-link" href="https://linkedin.com/in/abdulhayykhan" target="_blank" rel="noopener noreferrer">Abdul Hayy Khan</a></p>
+        </footer>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-popup">
+            <div class="loading-icon">⚡</div>
+            <h3 class="loading-title">Converting your file...</h3>
+            <p class="loading-subtitle" id="loadingStage">ByteShift is working its magic</p>
+            <div class="loading-bar-track">
+                <div class="loading-bar-fill" id="loadingBar"></div>
+            </div>
+            <p class="loading-percent" id="loadingPercent">0%</p>
+            <p class="loading-hint">Please wait, this may take a moment...</p>
+        </div>
+    </div>
+
+    <script>
+      // Format map: input extension -> available output formats with per-format routes
+      const formatMap = {
+        'png':  { formats: ['JPG', 'WEBP', 'PDF', 'DOCX'], routes: { jpg: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
+        'jpg':  { formats: ['PNG', 'WEBP', 'PDF', 'DOCX'], routes: { png: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
+        'jpeg': { formats: ['PNG', 'WEBP', 'PDF', 'DOCX'], routes: { png: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
+        'webp': { formats: ['PNG', 'JPG', 'PDF', 'DOCX'], routes: { png: '/convert/image', jpg: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
+        'pdf':  { formats: ['DOCX', 'PNG', 'JPG'], routes: { docx: '/convert/document', png: '/convert/pdf-to-image', jpg: '/convert/pdf-to-image' } },
+        'docx': { formats: ['PDF', 'PNG', 'JPG'], routes: { pdf: '/convert/document', png: '/convert/docx-to-image', jpg: '/convert/docx-to-image' } },
+        'mp3':  { formats: ['WAV', 'MP4'], routes: { wav: '/convert/audio', mp4: '/convert/audio-to-video' } },
+        'wav':  { formats: ['MP3', 'MP4'], routes: { mp3: '/convert/audio', mp4: '/convert/audio-to-video' } },
+        'mp4':  { formats: ['AVI', 'MP3', 'WAV'], routes: { avi: '/convert/video', mp3: '/convert/video-to-audio', wav: '/convert/video-to-audio' } },
+        'avi':  { formats: ['MP4', 'MP3', 'WAV'], routes: { mp4: '/convert/video', mp3: '/convert/video-to-audio', wav: '/convert/video-to-audio' } },
+      };
+
+      const fileIconMap = {
+        'png': '🖼️', 'jpg': '🖼️', 'jpeg': '🖼️', 'webp': '🖼️',
+        'pdf': '📕', 'docx': '📝',
+        'mp3': '🎵', 'wav': '🎵',
+        'mp4': '🎬', 'avi': '🎬',
+      };
+
+      const categoryBadges = {
+        'png': 'Image', 'jpg': 'Image', 'jpeg': 'Image', 'webp': 'Image',
+        'pdf': 'Document', 'docx': 'Document',
+        'mp3': 'Audio', 'wav': 'Audio',
+        'mp4': 'Video', 'avi': 'Video',
+      };
+
+      // File size limits in MB (type-specific)
+      const fileSizeLimits = {
+        'image': 50,    // PNG, JPG, JPEG, WEBP
+        'document': 100, // PDF, DOCX
+        'audio': 500,   // MP3, WAV
+        'video': 2048,  // MP4, AVI
+      };
+
+      // Get category type from extension
+      const getFileCategory = function(ext) {
+        const imageExts = ['png', 'jpg', 'jpeg', 'webp'];
+        const docExts = ['pdf', 'docx'];
+        const audioExts = ['mp3', 'wav'];
+        const videoExts = ['mp4', 'avi'];
+        
+        if (imageExts.includes(ext)) return 'image';
+        if (docExts.includes(ext)) return 'document';
+        if (audioExts.includes(ext)) return 'audio';
+        if (videoExts.includes(ext)) return 'video';
+        return null;
+      };
+
+      const uploadArea = document.getElementById('uploadArea');
+      const fileInput = document.getElementById('fileInput');
+      const hiddenFileInput = document.getElementById('hiddenFileInput');
+      const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+      const uploadInfo = document.getElementById('uploadInfo');
+      const fileName = document.getElementById('fileName');
+      const fileMeta = document.getElementById('fileMeta');
+      const fileSize = document.getElementById('fileSize');
+      const fileIcon = document.getElementById('fileIcon');
+      const formatGrid = document.getElementById('formatGrid');
+      const converterForm = document.getElementById('converterForm');
+      const outputFormatInput = document.getElementById('outputFormatInput');
+      const convertBtn = document.getElementById('convertBtn');
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      const loadingBar = document.getElementById('loadingBar');
+      const loadingPercent = document.getElementById('loadingPercent');
+      const loadingStage = document.getElementById('loadingStage');
+
+      // Click upload area to trigger file input
+      const changeFileBtn = document.getElementById('changeFileBtn');
+      
+      function openFilePicker() {
+        fileInput.click();
+      }
+
+      uploadArea.addEventListener('click', openFilePicker);
+
+      if (changeFileBtn) {
+        changeFileBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          openFilePicker();
+        });
+      }
+
+      // Drag and drop functionality
+      uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadArea.classList.add('drag-active');
+      });
+
+      uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadArea.classList.remove('drag-active');
+      });
+
+      uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadArea.classList.remove('drag-active');
+        
+        const droppedFiles = e.dataTransfer.files;
+        if (droppedFiles.length > 0) {
+          fileInput.files = droppedFiles;
+          // Trigger change event manually
+          const event = new Event('change', { bubbles: true });
+          fileInput.dispatchEvent(event);
+        }
+      });
+
+      // On file selected
+      fileInput.addEventListener('change', function() {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const ext = file.name.split('.').pop().toLowerCase();
+        const mapping = formatMap[ext];
+
+        // Reset selected format whenever file changes
+        outputFormatInput.value = '';
+        convertBtn.disabled = true;
+
+        // Show file info
+        uploadPlaceholder.classList.add('hidden');
+        uploadInfo.classList.remove('hidden');
+        fileName.textContent = file.name;
+        fileIcon.textContent = fileIconMap[ext] || '📄';
+
+        // Display file size
+        if (fileSize) {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          const sizeKB = (file.size / 1024).toFixed(2);
+          fileSize.textContent = 'Size: ' + (file.size > 1024 * 1024 ? sizeMB + ' MB' : sizeKB + ' KB');
+        }
+
+        // Validate file size
+        const category = getFileCategory(ext);
+        const sizeInMB = file.size / (1024 * 1024);
+        const limit = category ? fileSizeLimits[category] : 50;
+        let isSizeValid = sizeInMB <= limit;
+
+        if (!mapping) {
+          fileMeta.textContent = 'Unsupported format';
+          if (fileSize) fileSize.textContent = '';
+          formatGrid.innerHTML = '<p class="format-placeholder">This file type is not supported.</p>';
+          convertBtn.disabled = true;
+          converterForm.removeAttribute('action');
+          return;
+        }
+
+        fileMeta.textContent = 'Detected: ' + ext.toUpperCase();
+
+        // Add size validation message if file is too large
+        if (!isSizeValid) {
+          fileMeta.textContent += ' (File exceeds ' + limit + 'MB limit)';
+          fileMeta.classList.add('error-text');
+          formatGrid.innerHTML = '<p class="format-placeholder error-text">⚠️ File is too large. Maximum: ' + limit + 'MB</p>';
+          convertBtn.disabled = true;
+          converterForm.removeAttribute('action');
+          return;
+        } else if (fileMeta.classList) {
+          fileMeta.classList.remove('error-text');
+        }
+
+        // Populate format buttons with category badges
+        formatGrid.innerHTML = '';
+        mapping.formats.forEach(function(fmt) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'format-btn';
+          
+          // Create label with format and category badge
+          const formatLower = fmt.toLowerCase();
+          const category = categoryBadges[formatLower] || 'Other';
+          const badgeSpan = document.createElement('span');
+          badgeSpan.className = 'format-label';
+          badgeSpan.innerHTML = fmt + '<span class="category-badge">' + category + '</span>';
+          btn.appendChild(badgeSpan);
+          
+          btn.addEventListener('click', function() {
+            document.querySelectorAll('.format-btn').forEach(function(b) {
+              b.classList.remove('selected');
+            });
+            btn.classList.add('selected');
+            outputFormatInput.value = formatLower;
+            
+            // Set form action based on selected format
+            const route = mapping.routes[formatLower];
+            if (route) {
+              converterForm.action = route;
+            }
+            convertBtn.disabled = false;
+          });
+          formatGrid.appendChild(btn);
+        });
+      });
+
+      async function pollProgress(jobId, onUpdate, shouldStop) {
+        const maxWaitMs = 15 * 60 * 1000;
+        const started = Date.now();
+
+        while ((Date.now() - started) < maxWaitMs) {
+          if (shouldStop && shouldStop()) {
+            return { status: 'cancelled', progress: 0, stage: 'Cancelled' };
+          }
+
+          try {
+            const response = await fetch('/progress/' + encodeURIComponent(jobId), { cache: 'no-store' });
+            if (response.ok) {
+              const data = await response.json();
+              onUpdate(data);
+
+              if (data.status === 'completed' || data.status === 'failed') {
+                return data;
+              }
+            }
+          } catch (_) {
+            // Ignore transient polling issues; conversion may still be running.
+          }
+
+          await new Promise(function(resolve) { setTimeout(resolve, 250); });
+        }
+
+        return { status: 'timeout', progress: 95, stage: 'Taking longer than expected' };
+      }
+
+      function parseFilenameFromDisposition(disposition, fallbackName) {
+        if (!disposition) return fallbackName;
+        const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
+        if (!match || !match[1]) return fallbackName;
+        return decodeURIComponent(match[1].replace(/\"/g, '').trim());
+      }
+
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      // On form submit: post via fetch + poll backend progress
+      converterForm.addEventListener('submit', async function(e) {
+        if (!fileInput.files[0] || !outputFormatInput.value || !converterForm.action) {
+          e.preventDefault();
+          return;
+        }
+        e.preventDefault();
+
+        const jobId = (window.crypto && window.crypto.randomUUID)
+          ? window.crypto.randomUUID()
+          : ('job-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+
+        convertBtn.disabled = true;
+        loadingOverlay.classList.add('active');
+        loadingBar.style.width = '0%';
+        loadingPercent.textContent = '0%';
+        if (loadingStage) loadingStage.textContent = 'Preparing conversion';
+
+        let stopPolling = false;
+
+        const pollPromise = pollProgress(jobId, function(data) {
+          const progressValue = Math.max(0, Math.min(100, Number(data.progress) || 0));
+          loadingBar.style.transition = 'width 0.2s ease';
+          loadingBar.style.width = progressValue + '%';
+          loadingPercent.textContent = Math.floor(progressValue) + '%';
+          if (loadingStage && data.stage) loadingStage.textContent = data.stage;
+        }, function() {
+          return stopPolling;
+        });
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('output_format', outputFormatInput.value);
+        formData.append('job_id', jobId);
+
+        let conversionError = null;
+        try {
+          const response = await fetch(converterForm.action, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            let detail = 'Conversion failed';
+            try {
+              const json = await response.json();
+              if (json && json.detail) detail = json.detail;
+            } catch (_) {}
+            throw new Error(detail);
+          }
+
+          const blob = await response.blob();
+          const ext = outputFormatInput.value || 'bin';
+          const fallbackName = 'converted-file.' + ext;
+          const filename = parseFilenameFromDisposition(response.headers.get('content-disposition'), fallbackName);
+          downloadBlob(blob, filename);
+        } catch (err) {
+          conversionError = err;
+          stopPolling = true;
+        }
+
+        const finalProgress = await pollPromise;
+
+        if (conversionError || finalProgress.status === 'failed') {
+          loadingBar.style.width = '100%';
+          loadingPercent.textContent = '100%';
+          if (loadingStage) loadingStage.textContent = 'Conversion failed';
+          alert((conversionError && conversionError.message) || finalProgress.error || 'Conversion failed');
+        } else {
+          loadingBar.style.width = '100%';
+          loadingPercent.textContent = '100%';
+          if (loadingStage) loadingStage.textContent = 'Conversion complete';
+        }
+
+        setTimeout(function() {
+          loadingOverlay.classList.remove('active');
+          loadingBar.style.width = '0%';
+          loadingPercent.textContent = '0%';
+          if (loadingStage) loadingStage.textContent = 'ByteShift is working its magic';
+          convertBtn.disabled = !outputFormatInput.value;
+        }, 500);
+      });
+    </script>
+</body>
+</html>
