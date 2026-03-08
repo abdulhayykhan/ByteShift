@@ -40,6 +40,11 @@ async def execute_with_progress(job_id: str, conversion_coro):
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
 @app.post("/convert/image")
 async def convert_image_route(
     background_tasks: BackgroundTasks,
@@ -153,21 +158,6 @@ async def image_to_pdf_route(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image to PDF conversion failed: {str(e)}")
-
-@app.post("/convert/image-to-docx")
-async def image_to_docx_route(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    job_id: str = Form(default="")
-):
-    """Convert an image to DOCX."""
-    try:
-        from converters.image import image_to_docx
-        return await execute_with_progress(job_id, image_to_docx(file, background_tasks))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image to DOCX conversion failed: {str(e)}")
 
 @app.post("/convert/pdf-to-image")
 async def pdf_to_image_route(

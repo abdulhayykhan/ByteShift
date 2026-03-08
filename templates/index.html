@@ -91,10 +91,10 @@
     <script>
       // Format map: input extension -> available output formats with per-format routes
       const formatMap = {
-        'png':  { formats: ['JPG', 'WEBP', 'PDF', 'DOCX'], routes: { jpg: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
-        'jpg':  { formats: ['PNG', 'WEBP', 'PDF', 'DOCX'], routes: { png: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
-        'jpeg': { formats: ['PNG', 'WEBP', 'PDF', 'DOCX'], routes: { png: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
-        'webp': { formats: ['PNG', 'JPG', 'PDF', 'DOCX'], routes: { png: '/convert/image', jpg: '/convert/image', pdf: '/convert/image-to-pdf', docx: '/convert/image-to-docx' } },
+        'png':  { formats: ['JPG', 'WEBP', 'PDF'], routes: { jpg: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf' } },
+        'jpg':  { formats: ['PNG', 'WEBP', 'PDF'], routes: { png: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf' } },
+        'jpeg': { formats: ['PNG', 'WEBP', 'PDF'], routes: { png: '/convert/image', webp: '/convert/image', pdf: '/convert/image-to-pdf' } },
+        'webp': { formats: ['PNG', 'JPG', 'PDF'], routes: { png: '/convert/image', jpg: '/convert/image', pdf: '/convert/image-to-pdf' } },
         'pdf':  { formats: ['DOCX', 'PNG', 'JPG'], routes: { docx: '/convert/document', png: '/convert/pdf-to-image', jpg: '/convert/pdf-to-image' } },
         'docx': { formats: ['PDF', 'PNG', 'JPG'], routes: { pdf: '/convert/document', png: '/convert/docx-to-image', jpg: '/convert/docx-to-image' } },
         'mp3':  { formats: ['WAV', 'MP4'], routes: { wav: '/convert/audio', mp4: '/convert/audio-to-video' } },

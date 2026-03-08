@@ -168,8 +168,10 @@ async def convert_document(
     try:
         if conversion_key == "pdf->docx":
             cv = Converter(input_path)
-            cv.convert(output_path)
-            cv.close()
+            try:
+                cv.convert(output_path)
+            finally:
+                cv.close()
         elif conversion_key == "docx->pdf":
             generated_pdf = convert_docx_to_pdf_libreoffice(input_path, os.path.dirname(output_path))
             if generated_pdf != output_path:

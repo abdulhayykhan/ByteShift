@@ -7,7 +7,7 @@ It supports image, document, audio, and video conversion routes and streams conv
 
 - Backend: FastAPI, Starlette, Uvicorn
 - Frontend: HTML, CSS, vanilla JavaScript
-- Conversion libraries: Pillow, pdf2docx, python-docx, pydub, ffmpeg-python, pdf2image, pypdfium2
+- Conversion libraries: Pillow, pdf2docx, pydub, ffmpeg-python, pdf2image, pypdfium2
 - Runtime system dependencies: `ffmpeg`, `poppler-utils`
 
 ## Supported Conversions
@@ -15,7 +15,6 @@ It supports image, document, audio, and video conversion routes and streams conv
 - Image routes:
   - PNG/JPG/JPEG/WEBP -> PNG/JPG/JPEG/WEBP
   - Image -> PDF
-  - Image -> DOCX
 - Document routes:
   - PDF -> DOCX
   - PDF -> PNG/JPG (first page)
